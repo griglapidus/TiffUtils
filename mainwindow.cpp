@@ -1,170 +1,171 @@
 #include "mainwindow.h"
-#include <tiffio.h>
 #include <QLabel>
 #include <QApplication>
 #include <QLayout>
 #include <QFileDialog>
 #include <QDir>
 #include <QFileInfo>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
-    m_convertAllFilesCheck(new QCheckBox("Convert all files in folder", this)),
+    m_converterThread(new QThread()),
+    m_tiffConverter(new TiffConverter()),
+    m_inputGroupBox(new QGroupBox("Input", this)),
+    m_filesListView(new QListView(this)),
+    m_addFilesBtn(new QPushButton("Add Files...", this)),
+    m_addFolderBtn(new QPushButton("Add Folder...", this)),
+    m_removeBtn(new QPushButton("Remove", this)),
+    m_removeAllBtn(new QPushButton("Remove all", this)),
+    m_outputGroupBox(new QGroupBox("Output", this)),
     m_useOutSubDirCheck(new QCheckBox("Save to Output subdirectory", this)),
-    m_filePath(new QLineEdit(this)),
-    m_openBtn(new QPushButton(qApp->style()->standardIcon(QStyle::SP_ArrowLeft), "", this)),
     m_outputPath(new QLineEdit(this)),
+    m_getOutputFolderBtn(new QPushButton("...", this)),
     m_targetPixValue(new QComboBox(this)),
     m_processBtn(new QPushButton("Process")),
-    m_totalProgressBar(new QProgressBar(this)),
-    m_fileProgressBar(new QProgressBar(this))
+    m_stopBtn(new QPushButton("Stop")),
+    m_totalProgressBar(new QProgressBar(this))
 {
     QWidget *centralWidget = new QWidget(this);
     QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
-    QHBoxLayout *checkLayout = new QHBoxLayout();
-    checkLayout->addWidget(m_convertAllFilesCheck);
-    checkLayout->addWidget(m_useOutSubDirCheck);
-    QHBoxLayout *filePathLayout = new QHBoxLayout();
-    filePathLayout->addWidget(new QLabel("File's path", this));
-    filePathLayout->addWidget(m_filePath);
-    filePathLayout->addWidget(m_openBtn);
+    QVBoxLayout *inputLayout = new QVBoxLayout(m_inputGroupBox);
+    inputLayout->addWidget(m_filesListView);
+    QGridLayout *inputBtnsGrid = new QGridLayout();
+    inputBtnsGrid->addWidget(m_addFilesBtn, 0,0);
+    inputBtnsGrid->addWidget(m_addFolderBtn, 1,0);
+    inputBtnsGrid->addWidget(m_removeBtn, 0,2);
+    inputBtnsGrid->addWidget(m_removeAllBtn, 1,2);
+    inputBtnsGrid->setColumnStretch(1, 1);
+    inputLayout->addLayout(inputBtnsGrid);
+    m_inputGroupBox->setLayout(inputLayout);
+    mainLayout->addWidget(m_inputGroupBox);
+
+    QVBoxLayout *outputLayout = new QVBoxLayout(m_outputGroupBox);
     QHBoxLayout *outputPathLayout = new QHBoxLayout();
     outputPathLayout->addWidget(new QLabel("Output path", this));
     outputPathLayout->addWidget(m_outputPath);
+    outputPathLayout->addWidget(m_getOutputFolderBtn);
+    outputLayout->addLayout(outputPathLayout);
+    outputLayout->addWidget(m_useOutSubDirCheck);
     QHBoxLayout *pixValLayout = new QHBoxLayout();
     pixValLayout->addWidget(new QLabel("Target pixels value", this));
     pixValLayout->addWidget(m_targetPixValue);
-    mainLayout->addLayout(checkLayout);
-    mainLayout->addLayout(filePathLayout);
-    mainLayout->addLayout(outputPathLayout);
-    mainLayout->addLayout(pixValLayout);
-    mainLayout->addWidget(m_processBtn);
+    outputLayout->addLayout(pixValLayout);
+    m_outputGroupBox->setLayout(outputLayout);
+    mainLayout->addWidget(m_outputGroupBox);
+    QHBoxLayout *startStopLayout = new QHBoxLayout();
+    startStopLayout->addWidget(m_processBtn);
+    startStopLayout->addWidget(m_stopBtn);
+    mainLayout->addLayout(startStopLayout);
     mainLayout->addWidget(m_totalProgressBar);
-    mainLayout->addWidget(m_fileProgressBar);
     centralWidget->setLayout(mainLayout);
     setCentralWidget(centralWidget);
 
-    QObject::connect(m_openBtn, SIGNAL(clicked(bool)), this, SLOT(getFileName()));
+    m_filesListView->setModel(&m_filesModel);
+    m_filesListView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+    m_targetPixValue->addItems({"Small","Medium","Large"});
+
+    m_totalProgressBar->setMaximum(100);
+
+    m_tiffConverter->moveToThread(m_converterThread);
+
+    setMinimumWidth(400);
+
+    QObject::connect(m_addFilesBtn, SIGNAL(clicked(bool)), this, SLOT(addFiles()));
+    QObject::connect(m_addFolderBtn, SIGNAL(clicked(bool)), this, SLOT(addFolder()));
+    QObject::connect(m_removeBtn, SIGNAL(clicked(bool)), this, SLOT(removeFile()));
+    QObject::connect(m_removeAllBtn, SIGNAL(clicked(bool)), this, SLOT(removeAll()));
+    QObject::connect(m_getOutputFolderBtn, SIGNAL(clicked(bool)), this, SLOT(getOutputFolder()));
+
     QObject::connect(m_processBtn, SIGNAL(clicked(bool)), this, SLOT(ConvertTiff()));
+    QObject::connect(m_stopBtn, SIGNAL(clicked(bool)), m_tiffConverter, SLOT(stopProcess()), Qt::DirectConnection);
     QObject::connect(m_useOutSubDirCheck, SIGNAL(stateChanged(int)), this, SLOT(onUseOutSubDirCheck(int)));
+    QObject::connect(this, SIGNAL(ConvertTiffSignal(QStringList,QString,int)), m_tiffConverter, SLOT(ConvertTiff(QStringList,QString,int)), Qt::QueuedConnection);
+    QObject::connect(m_tiffConverter, SIGNAL(progressSignal(quint32)), this, SLOT(setProgress(quint32)), Qt::QueuedConnection);
+
+    m_converterThread->start();
 }
 
-MainWindow::~MainWindow() {}
+MainWindow::~MainWindow() {
+}
 
 void MainWindow::ConvertTiff()
 {
-    ConvertTiff("C:/work/1/in.tif", "C:/work/1/out.tif", 3);
-}
-
-void MainWindow::getFileNames() {
-    bool convFullDir = m_convertAllFilesCheck->isChecked();
-    m_files.clear();
-    if(convFullDir) {
-        QString path = QFileDialog::getExistingDirectory(this, tr("Open File"));
-        QDir dir(path);
-        m_files = dir.entryList({"*.tif", "*.tiff"});
-    } else {
-        m_files = QFileDialog::getOpenFileNames(this, tr("Open File"),
-                                            "",
-                                            tr("Images (*.tif *.tiff)"));
+    bool useOutputSubFolder = m_useOutSubDirCheck->isChecked();
+    QString outputPath = "";
+    if(!useOutputSubFolder) {
+        outputPath = m_outputPath->text();
+        if(!outputPath.size()) {
+            QMessageBox msgBox;
+            msgBox.setText("Output folder should be setted, or use Save to Output subdirectory.");
+            msgBox.exec();
+            return;
+        }
     }
+    emit ConvertTiffSignal(m_filesModel.stringList(), outputPath, m_targetPixValue->currentIndex() + 1);
 }
 
-void MainWindow::getFileNames(QString path)
+void MainWindow::addFiles()
 {
+    QStringList files = QFileDialog::getOpenFileNames(this, tr("Open File"),
+                                                        "",
+                                                        tr("Images (*.tif *.tiff)"));
 
+    files += m_filesModel.stringList();
+    files.removeDuplicates();
+    m_filesModel.setStringList(files);
+}
+
+void MainWindow::addFolder()
+{
+    QString path = QFileDialog::getExistingDirectory(this, tr("Open File"));
+    QDir dir(path);
+    QFileInfoList filesInfo = dir.entryInfoList({"*.tif", "*.tiff"});
+    QStringList files;
+    for(auto &info: filesInfo) {
+        files.append(info.absoluteFilePath());
+    }
+
+    files += m_filesModel.stringList();
+    files.removeDuplicates();
+    m_filesModel.setStringList(files);
+}
+
+void MainWindow::removeFile()
+{
+    QStringList files = m_filesModel.stringList();
+
+    QStringList list;
+    foreach(const QModelIndex &index,
+             m_filesListView->selectionModel()->selectedIndexes())
+        list.append(files[index.row()]);
+    for(auto& file: list) {
+        files.removeAll(file);
+    }
+    m_filesModel.setStringList(files);
+}
+
+void MainWindow::removeAll()
+{
+    m_filesModel.setStringList(QStringList());
+}
+
+void MainWindow::getOutputFolder()
+{
+    QString path = QFileDialog::getExistingDirectory(this, tr("Open File"));
+    if(path.size()) {
+        m_outputPath->setText(path);
+    }
 }
 
 void MainWindow::onUseOutSubDirCheck(int checked)
 {
-    m_outputPath->setReadOnly(checked);
-    QString inFilePath = m_filePath->text();
-    if(!inFilePath.size())
-        return;
-    QFileInfo fileInfo(inFilePath);
-    QDir dir = fileInfo.absoluteDir();
-    dir.mkdir("Output");
-    dir.cd("Output");
-    m_outputPath->setText(dir.absolutePath());
+    m_outputPath->setEnabled(checked == 0);
+    m_getOutputFolderBtn->setEnabled(checked == 0);
 }
 
-void MainWindow::ConvertTiff(QString inFile, QString outFile, int targetValue)
+void MainWindow::setProgress(quint32 pogressVal)
 {
-    TIFF* inTiffImage = TIFFOpen(inFile.toLocal8Bit(), "r");
-    if (inTiffImage == NULL)
-        return;
-
-    int nWidth = 0, nHeight = 0, nRowsPerStrip = 0;
-    qint16 nInBpp, nInSpp, nInPlanConf, nInPhotomrtric, nInComp;
-    nInBpp = nInSpp = nInPlanConf = nInPhotomrtric = nInComp = 0;
-    float fXRes = 0, fYRes = 0;
-    // Configure the tiff parameters (use 8 bits palette configuration)
-    TIFFGetField(inTiffImage, TIFFTAG_IMAGEWIDTH, &nWidth);
-    TIFFGetField(inTiffImage, TIFFTAG_IMAGELENGTH, &nHeight);
-    TIFFGetField(inTiffImage, TIFFTAG_XRESOLUTION, &fXRes);
-    TIFFGetField(inTiffImage, TIFFTAG_YRESOLUTION, &fYRes);
-    TIFFGetField(inTiffImage, TIFFTAG_SAMPLESPERPIXEL, &nInSpp);
-    TIFFGetField(inTiffImage, TIFFTAG_BITSPERSAMPLE, &nInBpp);
-    TIFFGetField(inTiffImage, TIFFTAG_PLANARCONFIG, &nInPlanConf);
-    TIFFGetField(inTiffImage, TIFFTAG_PHOTOMETRIC, &nInPhotomrtric);
-    TIFFGetField(inTiffImage, TIFFTAG_COMPRESSION, &nInComp);
-    TIFFGetField(inTiffImage, TIFFTAG_ROWSPERSTRIP, &nRowsPerStrip);
-
-    if(nInBpp != 1)
-        return;
-
-    TIFF* outTiffImage = TIFFOpen(outFile.toLocal8Bit(), "w");
-    if (inTiffImage == NULL)
-        return;
-
-    TIFFSetField(outTiffImage, TIFFTAG_IMAGEWIDTH, nWidth);
-    TIFFSetField(outTiffImage, TIFFTAG_IMAGELENGTH, nHeight);
-    TIFFSetField(outTiffImage, TIFFTAG_XRESOLUTION, fXRes);
-    TIFFSetField(outTiffImage, TIFFTAG_YRESOLUTION, fYRes);
-    TIFFSetField(outTiffImage, TIFFTAG_SAMPLESPERPIXEL, nInSpp);
-    TIFFSetField(outTiffImage, TIFFTAG_BITSPERSAMPLE, 2);
-    TIFFSetField(outTiffImage, TIFFTAG_PLANARCONFIG, nInPlanConf);
-    TIFFSetField(outTiffImage, TIFFTAG_PHOTOMETRIC, nInPhotomrtric);
-    TIFFSetField(outTiffImage, TIFFTAG_COMPRESSION, nInComp);
-    TIFFSetField(outTiffImage, TIFFTAG_ROWSPERSTRIP, nRowsPerStrip);
-
-
-    unsigned allocatedSize256In = (nWidth + 31) / 32;
-    unsigned allocatedSize256Out = allocatedSize256In * 2;
-
-    const __m256i swapOddEvenBytesMask = _mm256_setr_epi8(
-        1, 0, 3, 2, 5, 4, 7, 6,
-        9, 8, 11, 10, 13, 12, 15, 14,
-        1, 0, 3, 2, 5, 4, 7, 6,
-        9, 8, 11, 10, 13, 12, 15, 14
-        );
-
-    uint64_t exendedMask = 0x5555555555555555; // 0b0101....
-
-    std::vector<__m256i> inLineData(allocatedSize256In);
-    std::vector<__m256i> outLineData(allocatedSize256Out);
-    std::vector<__m256i> emptyData(allocatedSize256Out);
-
-    std::vector<__m256i> &leftData = targetValue == 1 ? emptyData : outLineData;
-    std::vector<__m256i> &rightData = targetValue == 2 ? emptyData : outLineData;
-
-    for (int i = 0; i < nHeight; i++)
-    {
-        TIFFReadScanline(inTiffImage,(qint8*)inLineData.data(), i);
-        __int32 *in = (__int32*)inLineData.data();
-        __int64 *out = (__int64*)outLineData.data();
-        for (int j = 0; j < inLineData.size() * 8; ++j) {
-            out[j] = _pdep_u64(in[j], exendedMask);
-        }
-        for (int j = 0; j < outLineData.size(); ++j) {
-            outLineData[j] = _mm256_or_si256(_mm256_slli_epi64(leftData[j], 1), rightData[j]);
-            outLineData[j] = _mm256_shuffle_epi8(outLineData[j], swapOddEvenBytesMask); // It's needed to swap odd and even bytes due to extension
-        }
-        TIFFWriteScanline(outTiffImage, outLineData.data(), i, 0);
-    }
-
-    TIFFClose(inTiffImage);
-    inTiffImage = NULL;
-    TIFFClose(outTiffImage);
-    outTiffImage = NULL;
+    m_totalProgressBar->setValue(pogressVal);
 }

@@ -7,6 +7,11 @@
 #include <QComboBox>
 #include <QProgressBar>
 #include <QCheckBox>
+#include <QGroupBox>
+#include <QStringListModel>
+#include <QListView>
+#include "TiffConverter.h"
+#include <QThread>
 
 class MainWindow : public QMainWindow
 {
@@ -16,25 +21,41 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    void ConvertTiff(QString inFile, QString outFile, int targetValue = 1);
-
 private slots:
+    void addFiles();
+    void addFolder();
+    void removeFile();
+    void removeAll();
+
+    void getOutputFolder();
+
     void ConvertTiff();
-    void getFileNames();
-    void getFileNames(QString path);
     void onUseOutSubDirCheck(int checked);
+    void setProgress(quint32 pogressVal);
+
+signals:
+    void ConvertTiffSignal(QStringList inFiles, QString outputFolder, int targetValue);
 
 private:
-    QStringList m_files;
+    QThread *m_converterThread = nullptr;
+    TiffConverter *m_tiffConverter = nullptr;
+    QStringListModel m_filesModel;
 
-    QCheckBox *m_convertAllFilesCheck = nullptr;
+    QGroupBox *m_inputGroupBox = nullptr;
+    QListView *m_filesListView = nullptr;
+    QPushButton *m_addFilesBtn = nullptr;
+    QPushButton *m_addFolderBtn = nullptr;
+    QPushButton *m_removeBtn = nullptr;
+    QPushButton *m_removeAllBtn = nullptr;
+
+    QGroupBox *m_outputGroupBox = nullptr;
     QCheckBox *m_useOutSubDirCheck = nullptr;
-    QLineEdit *m_filePath = nullptr;
-    QPushButton *m_openBtn = nullptr;
     QLineEdit *m_outputPath = nullptr;
+    QPushButton *m_getOutputFolderBtn = nullptr;
     QComboBox *m_targetPixValue = nullptr;
+
     QPushButton *m_processBtn = nullptr;
+    QPushButton *m_stopBtn = nullptr;
     QProgressBar *m_totalProgressBar = nullptr;
-    QProgressBar *m_fileProgressBar = nullptr;
 };
 #endif // MAINWINDOW_H
