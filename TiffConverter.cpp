@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QMessageBox>
 
 void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, int targetValue, bool negative)
 {
@@ -163,8 +164,12 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     TIFFGetField(inTiffImage, TIFFTAG_COMPRESSION, &nInComp);
     TIFFGetField(inTiffImage, TIFFTAG_ROWSPERSTRIP, &nRowsPerStrip);
 
-    if(nInBpp != 1 && nInBpp != 8)
+    if(nInBpp != 1 && nInBpp != 8) {
+        QMessageBox msgBox;
+        msgBox.setText(QString("Unsupported sample per pixel image format: %1 in File: %2").arg(nInBpp).arg(inFile));
+        msgBox.exec();
         return;
+    }
 
     TIFF* outTiffImage = TIFFOpen(outFile.toLocal8Bit(), "w+");
     if (outTiffImage == NULL)
