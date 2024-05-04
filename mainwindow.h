@@ -34,7 +34,7 @@ private slots:
     void setProgress(quint32 pogressVal);
 
 signals:
-    void ConvertTiffSignal(QStringList inFiles, QString outputFolder, int targetValue);
+    void ConvertTiffSignal(QStringList inFiles, QString outputFolder, int targetValue, bool negative, bool openOutput);
 
 private:
     QThread *m_converterThread = nullptr;
@@ -50,9 +50,11 @@ private:
 
     QGroupBox *m_outputGroupBox = nullptr;
     QCheckBox *m_useOutSubDirCheck = nullptr;
+    QCheckBox *m_openOutputOnFinish = nullptr;
     QLineEdit *m_outputPath = nullptr;
     QPushButton *m_getOutputFolderBtn = nullptr;
     QComboBox *m_targetPixValue = nullptr;
+    QCheckBox *m_negativeCheck = nullptr;
 
     QPushButton *m_processBtn = nullptr;
     QPushButton *m_stopBtn = nullptr;

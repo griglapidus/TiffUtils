@@ -19,9 +19,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_removeAllBtn(new QPushButton("Remove all", this)),
     m_outputGroupBox(new QGroupBox("Output", this)),
     m_useOutSubDirCheck(new QCheckBox("Save to Output subdirectory", this)),
+    m_openOutputOnFinish(new QCheckBox("Open Output folder(s)", this)),
     m_outputPath(new QLineEdit(this)),
     m_getOutputFolderBtn(new QPushButton("...", this)),
     m_targetPixValue(new QComboBox(this)),
+    m_negativeCheck(new QCheckBox("Negative (invert image)", this)),
     m_processBtn(new QPushButton("Process")),
     m_stopBtn(new QPushButton("Stop")),
     m_totalProgressBar(new QProgressBar(this))
@@ -47,10 +49,12 @@ MainWindow::MainWindow(QWidget *parent)
     outputPathLayout->addWidget(m_getOutputFolderBtn);
     outputLayout->addLayout(outputPathLayout);
     outputLayout->addWidget(m_useOutSubDirCheck);
+    outputLayout->addWidget(m_openOutputOnFinish);
     QHBoxLayout *pixValLayout = new QHBoxLayout();
     pixValLayout->addWidget(new QLabel("Target pixels value", this));
     pixValLayout->addWidget(m_targetPixValue);
     outputLayout->addLayout(pixValLayout);
+    outputLayout->addWidget(m_negativeCheck);
     m_outputGroupBox->setLayout(outputLayout);
     mainLayout->addWidget(m_outputGroupBox);
     QHBoxLayout *startStopLayout = new QHBoxLayout();
@@ -81,8 +85,10 @@ MainWindow::MainWindow(QWidget *parent)
     QObject::connect(m_processBtn, SIGNAL(clicked(bool)), this, SLOT(ConvertTiff()));
     QObject::connect(m_stopBtn, SIGNAL(clicked(bool)), m_tiffConverter, SLOT(stopProcess()), Qt::DirectConnection);
     QObject::connect(m_useOutSubDirCheck, SIGNAL(stateChanged(int)), this, SLOT(onUseOutSubDirCheck(int)));
-    QObject::connect(this, SIGNAL(ConvertTiffSignal(QStringList,QString,int)), m_tiffConverter, SLOT(ConvertTiff(QStringList,QString,int)), Qt::QueuedConnection);
+    QObject::connect(this, SIGNAL(ConvertTiffSignal(QStringList,QString,int, bool, bool)), m_tiffConverter, SLOT(ConvertTiff(QStringList,QString,int, bool, bool)), Qt::QueuedConnection);
     QObject::connect(m_tiffConverter, SIGNAL(progressSignal(quint32)), this, SLOT(setProgress(quint32)), Qt::QueuedConnection);
+
+    m_useOutSubDirCheck->setChecked(true);
 
     m_converterThread->start();
 }
@@ -103,7 +109,7 @@ void MainWindow::ConvertTiff()
             return;
         }
     }
-    emit ConvertTiffSignal(m_filesModel.stringList(), outputPath, m_targetPixValue->currentIndex() + 1);
+    emit ConvertTiffSignal(m_filesModel.stringList(), outputPath, m_targetPixValue->currentIndex() + 1, m_negativeCheck->isChecked(), m_openOutputOnFinish->isChecked());
 }
 
 void MainWindow::addFiles()
