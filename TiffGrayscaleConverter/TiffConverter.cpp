@@ -148,7 +148,7 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
         return;
 
     int nWidth = 0, nHeight = 0, nRowsPerStrip = 0;
-    qint16 nInBpp, nInSpp, nInPlanConf, nInPhotomrtric, nInComp;
+    quint16 nInBpp, nInSpp, nInPlanConf, nInPhotomrtric, nInComp;
     nInBpp = nInSpp = nInPlanConf = nInPhotomrtric = nInComp = 0;
     float fXRes = 0, fYRes = 0;
     // Configure the tiff parameters (use 8 bits palette configuration)
@@ -172,6 +172,10 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
 
     if(nInPhotomrtric != 0) {
         negative = !negative;
+    }
+
+    if(nInComp == 1) {
+        nInComp = 32946; // COMPRESSION_DEFLATE
     }
 
     TIFF* outTiffImage = TIFFOpen(outFile.toLocal8Bit(), "w+");
