@@ -182,7 +182,7 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     TIFFSetField(outTiffImage, TIFFTAG_SAMPLESPERPIXEL, nInSpp);
     TIFFSetField(outTiffImage, TIFFTAG_BITSPERSAMPLE, 2);
     TIFFSetField(outTiffImage, TIFFTAG_PLANARCONFIG, nInPlanConf);
-    TIFFSetField(outTiffImage, TIFFTAG_PHOTOMETRIC, nInPhotomrtric);
+    TIFFSetField(outTiffImage, TIFFTAG_PHOTOMETRIC, 0);
     TIFFSetField(outTiffImage, TIFFTAG_COMPRESSION, nInComp);
     TIFFSetField(outTiffImage, TIFFTAG_ROWSPERSTRIP, nRowsPerStrip);
 
