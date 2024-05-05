@@ -31,8 +31,8 @@ private slots:
 
     void ConvertTiff();
     void onUseOutSubDirCheck(int checked);
-    void setProgress(quint32 pogressVal);
-
+    void setProgress(quint32 progressVal);
+    void finished();
 signals:
     void ConvertTiffSignal(QStringList inFiles, QString outputFolder, int targetValue, bool negative, bool openOutput);
 

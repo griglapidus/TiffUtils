@@ -16,6 +16,7 @@ public slots:
 
 signals:
     void progressSignal(quint32 progress);
+    void finished();
 
 private:
     void ConvertTiff(QString inFile, QString outFile, int targetValue, bool negative);

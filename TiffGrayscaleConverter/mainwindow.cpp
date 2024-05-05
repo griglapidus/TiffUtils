@@ -87,7 +87,7 @@ MainWindow::MainWindow(QWidget *parent)
     QObject::connect(m_useOutSubDirCheck, SIGNAL(stateChanged(int)), this, SLOT(onUseOutSubDirCheck(int)));
     QObject::connect(this, SIGNAL(ConvertTiffSignal(QStringList,QString,int, bool, bool)), m_tiffConverter, SLOT(ConvertTiff(QStringList,QString,int, bool, bool)), Qt::QueuedConnection);
     QObject::connect(m_tiffConverter, SIGNAL(progressSignal(quint32)), this, SLOT(setProgress(quint32)), Qt::QueuedConnection);
-
+    QObject::connect(m_tiffConverter, SIGNAL(finished()), this, SLOT(finished()), Qt::QueuedConnection);
     m_useOutSubDirCheck->setChecked(true);
 
     m_converterThread->start();
@@ -109,6 +109,8 @@ void MainWindow::ConvertTiff()
             return;
         }
     }
+    setProgress(0);
+    m_processBtn->setEnabled(false);
     emit ConvertTiffSignal(m_filesModel.stringList(), outputPath, m_targetPixValue->currentIndex() + 1, m_negativeCheck->isChecked(), m_openOutputOnFinish->isChecked());
 }
 
@@ -171,7 +173,12 @@ void MainWindow::onUseOutSubDirCheck(int checked)
     m_getOutputFolderBtn->setEnabled(checked == 0);
 }
 
-void MainWindow::setProgress(quint32 pogressVal)
+void MainWindow::setProgress(quint32 progressVal)
 {
-    m_totalProgressBar->setValue(pogressVal);
+    m_totalProgressBar->setValue(progressVal);
+}
+
+void MainWindow::finished()
+{
+    m_processBtn->setEnabled(true);
 }

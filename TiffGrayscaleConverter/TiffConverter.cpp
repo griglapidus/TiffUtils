@@ -134,6 +134,7 @@ void TiffConverter::ConvertTiff(QStringList inFiles, QString outputFolder, int t
             QDesktopServices::openUrl(QUrl(outputFolder));
         }
     }
+    emit finished();
 }
 
 void TiffConverter::stopProcess()
