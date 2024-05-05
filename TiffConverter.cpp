@@ -35,9 +35,11 @@ void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
         TIFFReadScanline(inTiffImage,(qint8*)inLineData.data(), i);
         __int32 *in = (__int32*)inLineData.data();
         __int64 *out = (__int64*)outLineData.data();
+#pragma omp parallel for
         for (int j = 0; j < inLineData.size() * 8; ++j) {
             out[j] = _pdep_u64(in[j], exendedMask);
         }
+#pragma omp parallel for
         for (int j = 0; j < outLineData.size(); ++j) {
             outLineData[j] = _mm256_or_si256(_mm256_slli_epi64(leftData[j], 1), rightData[j]);
             outLineData[j] = _mm256_shuffle_epi8(outLineData[j], swapOddEvenBytesMask); // It's needed to swap odd and even bytes due to extension
@@ -66,23 +68,20 @@ void Convert8Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
     for (int row = 0; row < nHeight; row++)
     {
         TIFFReadScanline(inTiffImage,(qint8*)inLineData.data(), row);
-        for(int i = 0; i < allocatedSize256Out; ++i) {
+#pragma omp parallel for
+        for(unsigned i = 0; i < allocatedSize256Out; ++i) {
             quint8 *chankData = (quint8*)&inLineData[i*4];
-            for(int pixel = 0; pixel < 32; ++pixel) {
-                pixelsBytes[0][pixel] = chankData[pixel * 4];
-                pixelsBytes[1][pixel] = chankData[pixel * 4 + 1];
-                pixelsBytes[2][pixel] = chankData[pixel * 4 + 2];
-                pixelsBytes[3][pixel] = chankData[pixel * 4 + 3];
+            for(int j = 0; j < 4; ++j) {
+                for(int pixel = 0; pixel < 32; ++pixel) {
+                    pixelsBytes[j][pixel] = chankData[pixel * 4 + j];
+                }
+                if(j > 0) {
+                    pixels[j] = _mm256_srli_epi64(pixels[j], j * 2);
+                }
+
+                pixels[j] = _mm256_and_si256(pixels[j], copyMasks[j]);
             }
-            pixels[1] = _mm256_srli_epi64(pixels[1], 2);
-            pixels[2] = _mm256_srli_epi64(pixels[2], 4);
-            pixels[3] = _mm256_srli_epi64(pixels[3], 6);
-
-            outLineData[i] = _mm256_and_si256(pixels[0], copyMasks[0]);
-            outLineData[i] = _mm256_or_si256(outLineData[i], _mm256_and_si256(pixels[1], copyMasks[1]));
-            outLineData[i] = _mm256_or_si256(outLineData[i], _mm256_and_si256(pixels[2], copyMasks[2]));
-            outLineData[i] = _mm256_or_si256(outLineData[i], _mm256_and_si256(pixels[3], copyMasks[3]));
-
+            outLineData[i] = _mm256_or_si256(_mm256_or_si256(pixels[0], pixels[1]), _mm256_or_si256(pixels[2], pixels[3]));
             if(negative) {
                 outLineData[i] = _mm256_xor_si256(outLineData[i], negativeMask);
             }
@@ -169,6 +168,10 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
         msgBox.setText(QString("Unsupported sample per pixel image format: %1 in File: %2").arg(nInBpp).arg(inFile));
         msgBox.exec();
         return;
+    }
+
+    if(nInPhotomrtric != 0) {
+        negative = !negative;
     }
 
     TIFF* outTiffImage = TIFFOpen(outFile.toLocal8Bit(), "w+");
