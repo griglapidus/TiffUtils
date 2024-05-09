@@ -70,6 +70,9 @@ void MainWindow::openTiff()
     if(!path.size()) {
         return;
     }
+    if(m_tiffFile) {
+        closeTiff();
+    }
     m_tiffFile = TIFFOpen(path.toLocal8Bit().data(), "r+");
     m_model.loadFromTiff(m_tiffFile);
 

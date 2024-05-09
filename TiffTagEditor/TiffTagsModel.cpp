@@ -105,16 +105,16 @@ void TiffTagsModel::loadFromTiff()
         if(!item.m_name.size()) continue;
         if (TIFFFieldWithTag(m_tiffFile, item.m_tagID)) {
             switch (item.m_valueType) {
-            case TIFF_SETGET_UINT8: readTagVal<uint8_t>(m_tiffFile, item); break;
+            case TIFF_SETGET_UINT8:  readTagVal<uint8_t> (m_tiffFile, item); break;
             case TIFF_SETGET_UINT16: readTagVal<uint16_t>(m_tiffFile, item); break;
             case TIFF_SETGET_UINT32: readTagVal<uint32_t>(m_tiffFile, item); break;
-            case TIFF_SETGET_UINT64: readTagVal<float>(m_tiffFile, item); break;
-            case TIFF_SETGET_SINT8: readTagVal<int8_t>(m_tiffFile, item); break;
-            case TIFF_SETGET_SINT16: readTagVal<int16_t>(m_tiffFile, item); break;
-            case TIFF_SETGET_SINT32: readTagVal<int32_t>(m_tiffFile, item); break;
-            case TIFF_SETGET_SINT64: readTagVal<int64_t>(m_tiffFile, item); break;
-            case TIFF_SETGET_FLOAT: readTagVal<float>(m_tiffFile, item); break;
-            case TIFF_SETGET_DOUBLE: readTagVal<double>(m_tiffFile, item); break;
+            case TIFF_SETGET_UINT64: readTagVal<float>   (m_tiffFile, item); break;
+            case TIFF_SETGET_SINT8:  readTagVal<int8_t>  (m_tiffFile, item); break;
+            case TIFF_SETGET_SINT16: readTagVal<int16_t> (m_tiffFile, item); break;
+            case TIFF_SETGET_SINT32: readTagVal<int32_t> (m_tiffFile, item); break;
+            case TIFF_SETGET_SINT64: readTagVal<int64_t> (m_tiffFile, item); break;
+            case TIFF_SETGET_FLOAT:  readTagVal<float>   (m_tiffFile, item); break;
+            case TIFF_SETGET_DOUBLE: readTagVal<double>  (m_tiffFile, item); break;
             case TIFF_SETGET_ASCII: {
                 char* tagValue;
                 if (TIFFGetField(m_tiffFile, item.m_tagID, &tagValue)) {
@@ -213,6 +213,13 @@ QVariant TiffTagsModel::data(const QModelIndex &index, int role) const
     case Qt::EditRole: {
         if (index.column() == 2)
             return item.m_value;
+        }break;
+    case Qt::FontRole: {
+        if (index.column() == 2){
+            QFont font;
+            font.setBold(item.m_changed);
+            return font;
+        }
     }break;
     }
 
