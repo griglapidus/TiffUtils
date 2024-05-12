@@ -6,13 +6,14 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QHeaderView>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
     m_converterThread(new QThread()),
     m_tiffConverter(new TiffConverter()),
     m_inputGroupBox(new QGroupBox("Input", this)),
-    m_filesListView(new QListView(this)),
+    m_filesTableView(new QTableView(this)),
     m_addFilesBtn(new QPushButton("Add Files...", this)),
     m_addFolderBtn(new QPushButton("Add Folder...", this)),
     m_removeBtn(new QPushButton("Remove", this)),
@@ -31,7 +32,7 @@ MainWindow::MainWindow(QWidget *parent)
     QWidget *centralWidget = new QWidget(this);
     QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
     QVBoxLayout *inputLayout = new QVBoxLayout(m_inputGroupBox);
-    inputLayout->addWidget(m_filesListView);
+    inputLayout->addWidget(m_filesTableView);
     QGridLayout *inputBtnsGrid = new QGridLayout();
     inputBtnsGrid->addWidget(m_addFilesBtn, 0,0);
     inputBtnsGrid->addWidget(m_addFolderBtn, 1,0);
@@ -65,8 +66,10 @@ MainWindow::MainWindow(QWidget *parent)
     centralWidget->setLayout(mainLayout);
     setCentralWidget(centralWidget);
 
-    m_filesListView->setModel(&m_filesModel);
-    m_filesListView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_filesTableView->setModel(&m_filesModel);
+    m_filesTableView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_filesTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    m_filesTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
 
     m_targetPixValue->addItems({"Small","Medium","Large"});
 
@@ -74,7 +77,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_tiffConverter->moveToThread(m_converterThread);
 
-    setMinimumWidth(400);
+    setMinimumWidth(600);
 
     QObject::connect(m_addFilesBtn, SIGNAL(clicked(bool)), this, SLOT(addFiles()));
     QObject::connect(m_addFolderBtn, SIGNAL(clicked(bool)), this, SLOT(addFolder()));
@@ -91,6 +94,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_useOutSubDirCheck->setChecked(true);
 
     m_converterThread->start();
+    resize(650, 500);
 }
 
 MainWindow::~MainWindow() {
@@ -111,7 +115,7 @@ void MainWindow::ConvertTiff()
     }
     setProgress(0);
     m_processBtn->setEnabled(false);
-    emit ConvertTiffSignal(m_filesModel.stringList(), outputPath, m_targetPixValue->currentIndex() + 1, m_negativeCheck->isChecked(), m_openOutputOnFinish->isChecked());
+    emit ConvertTiffSignal(m_filesModel.files(), outputPath, m_targetPixValue->currentIndex() + 1, m_negativeCheck->isChecked(), m_openOutputOnFinish->isChecked());
 }
 
 void MainWindow::addFiles()
@@ -119,10 +123,7 @@ void MainWindow::addFiles()
     QStringList files = QFileDialog::getOpenFileNames(this, tr("Open File"),
                                                         "",
                                                         tr("Images (*.tif *.tiff)"));
-
-    files += m_filesModel.stringList();
-    files.removeDuplicates();
-    m_filesModel.setStringList(files);
+    m_filesModel.openTiff(files);
 }
 
 void MainWindow::addFolder()
@@ -134,29 +135,25 @@ void MainWindow::addFolder()
     for(auto &info: filesInfo) {
         files.append(info.absoluteFilePath());
     }
-
-    files += m_filesModel.stringList();
-    files.removeDuplicates();
-    m_filesModel.setStringList(files);
+    m_filesModel.openTiff(files);
 }
 
 void MainWindow::removeFile()
 {
-    QStringList files = m_filesModel.stringList();
-
-    QStringList list;
-    foreach(const QModelIndex &index,
-             m_filesListView->selectionModel()->selectedIndexes())
-        list.append(files[index.row()]);
-    for(auto& file: list) {
-        files.removeAll(file);
+    auto indexList = m_filesTableView->selectionModel()->selectedIndexes();
+    QVector<unsigned> rows;
+    for(auto& index: indexList) {
+        rows.append(index.row());
     }
-    m_filesModel.setStringList(files);
+    std::sort(rows.begin(), rows.end());
+    for(int i = rows.size() - 1; i >= 0; --i) {
+        m_filesModel.removeRows(rows[i], 1);
+    }
 }
 
 void MainWindow::removeAll()
 {
-    m_filesModel.setStringList(QStringList());
+    m_filesModel.removeAll();
 }
 
 void MainWindow::getOutputFolder()

@@ -8,8 +8,8 @@
 #include <QProgressBar>
 #include <QCheckBox>
 #include <QGroupBox>
-#include <QStringListModel>
-#include <QListView>
+#include "TiffTableModel.h"
+#include <QTableView>
 #include "TiffConverter.h"
 #include <QThread>
 
@@ -39,10 +39,10 @@ signals:
 private:
     QThread *m_converterThread = nullptr;
     TiffConverter *m_tiffConverter = nullptr;
-    QStringListModel m_filesModel;
+    TiffTableModel m_filesModel;
 
     QGroupBox *m_inputGroupBox = nullptr;
-    QListView *m_filesListView = nullptr;
+    QTableView *m_filesTableView = nullptr;
     QPushButton *m_addFilesBtn = nullptr;
     QPushButton *m_addFolderBtn = nullptr;
     QPushButton *m_removeBtn = nullptr;

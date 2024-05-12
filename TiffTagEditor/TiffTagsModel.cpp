@@ -96,7 +96,6 @@ void TiffTagsModel::loadFromTiff()
     m_data.clear();
     beginResetModel();
     for (int fi = 0, nfi = m_tiffFile->tif_nfields; fi < nfi; ++fi) {
-        m_tiffFile->tif_dir.td_customValues[fi].info;
         const TIFFField* pField = m_tiffFile->tif_fields[fi];
         TiffTagsModelItem item;
         item.m_name = QString(pField->field_name);

@@ -8,6 +8,8 @@
 #include <QUrl>
 #include <QMessageBox>
 
+extern QMap<int, QString> PhotometricNames;
+
 void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, int targetValue, bool negative)
 {
     unsigned allocatedSize256In = (nWidth + 255) / 256;
@@ -167,6 +169,13 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     if(nInBpp != 1 && nInBpp != 8) {
         QMessageBox msgBox;
         msgBox.setText(QString("Unsupported sample per pixel image format: %1 in File: %2").arg(nInBpp).arg(inFile));
+        msgBox.exec();
+        return;
+    }
+
+    if(nInPhotomrtric != 1 && nInPhotomrtric != 2) {
+        QMessageBox msgBox;
+        msgBox.setText(QString("Unsupported photomrtric image format: %1 in File: %2").arg(PhotometricNames[nInPhotomrtric]).arg(inFile));
         msgBox.exec();
         return;
     }
