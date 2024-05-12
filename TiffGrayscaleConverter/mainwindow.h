@@ -31,11 +31,13 @@ private slots:
 
     void ConvertTiff();
     void onUseOutSubDirCheck(int checked);
+    void onChangeResolutionCheck(int checked);
     void setProgress(quint32 progressVal);
     void finished();
+    void showMsg(QString msg);
 signals:
     void ConvertTiffSignal(QStringList inFiles, QString outputFolder, int targetValue, bool negative, bool openOutput);
-
+    void setRes(double newXRes, double newYRes);
 private:
     QThread *m_converterThread = nullptr;
     TiffConverter *m_tiffConverter = nullptr;
@@ -55,6 +57,9 @@ private:
     QPushButton *m_getOutputFolderBtn = nullptr;
     QComboBox *m_targetPixValue = nullptr;
     QCheckBox *m_negativeCheck = nullptr;
+    QCheckBox *m_changeResolutionCheck = nullptr;
+    QLineEdit *m_xResolution = nullptr;
+    QLineEdit *m_yResolution = nullptr;
 
     QPushButton *m_processBtn = nullptr;
     QPushButton *m_stopBtn = nullptr;

@@ -54,6 +54,27 @@ void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
     }
 }
 
+void Convert2Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, bool negative)
+{
+    unsigned allocatedSize256In = (nWidth + 127) / 128;
+    unsigned allocatedSize256Out = allocatedSize256In;
+
+    std::vector<__m256i> inLineData(allocatedSize256In);
+
+    __m256i negativeMask = _mm256_set1_epi8(0xff);
+    for (int i = 0; i < nHeight; i++)
+    {
+        TIFFReadScanline(inTiffImage,(qint8*)inLineData.data(), i);
+#pragma omp parallel for
+        for (int j = 0; j < inLineData.size(); ++j) {
+            if(negative) {
+                inLineData[j] = _mm256_xor_si256(inLineData[j], negativeMask);
+            }
+        }
+        TIFFWriteScanline(outTiffImage, inLineData.data(), i, 0);
+    }
+}
+
 void Convert8Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, bool negative)
 {
 
@@ -166,21 +187,12 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     TIFFGetField(inTiffImage, TIFFTAG_COMPRESSION, &nInComp);
     TIFFGetField(inTiffImage, TIFFTAG_ROWSPERSTRIP, &nRowsPerStrip);
 
-    if(nInBpp != 1 && nInBpp != 8) {
-        QMessageBox msgBox;
-        msgBox.setText(QString("Unsupported sample per pixel image format: %1 in File: %2").arg(nInBpp).arg(inFile));
-        msgBox.exec();
+    if(nInBpp != 1 && nInBpp != 8 && nInBpp != 2) {
+        emit showMsg(QString("Unsupported sample per pixel image format: %1 in File: %2").arg(nInBpp).arg(inFile));
         return;
     }
 
-    if(nInPhotomrtric != 1 && nInPhotomrtric != 2) {
-        QMessageBox msgBox;
-        msgBox.setText(QString("Unsupported photomrtric image format: %1 in File: %2").arg(PhotometricNames[nInPhotomrtric]).arg(inFile));
-        msgBox.exec();
-        return;
-    }
-
-    if(nInPhotomrtric != 0) {
+    if(nInPhotomrtric == 1) {
         negative = !negative;
         nInPhotomrtric = 0;
     }
@@ -192,6 +204,9 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     TIFF* outTiffImage = TIFFOpen(outFile.toLocal8Bit(), "w+");
     if (outTiffImage == NULL)
         return;
+
+    if(m_xRes > 0) fXRes = m_xRes;
+    if(m_yRes > 0) fYRes = m_yRes;
 
     TIFFSetField(outTiffImage, TIFFTAG_IMAGEWIDTH, nWidth);
     TIFFSetField(outTiffImage, TIFFTAG_IMAGELENGTH, nHeight);
@@ -208,6 +223,9 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     case 1:{
         Convert1Bit(inTiffImage, outTiffImage, nWidth, nHeight, targetValue, negative);
     }break;
+    case 2:{
+        Convert2Bit(inTiffImage, outTiffImage, nWidth, nHeight, negative);
+    }break;
     case 8:{
         Convert8Bit(inTiffImage, outTiffImage, nWidth, nHeight, negative);
     }break;
@@ -219,4 +237,10 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     inTiffImage = NULL;
     TIFFClose(outTiffImage);
     outTiffImage = NULL;
+}
+
+void TiffConverter::setRes(double newXRes, double newYRes)
+{
+    m_xRes = newXRes;
+    m_yRes = newYRes;
 }

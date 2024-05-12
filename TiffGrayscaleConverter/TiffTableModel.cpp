@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFont>
+#include <QMessageBox>
 
 QMap<int, QString> typeNames = {
     {TIFF_SETGET_UNDEFINED ,"UNDEFINED"},
@@ -102,7 +103,8 @@ QMap<int, QString> PhotometricNames = {
     {32845, "LOGLUV"},
     {32803, "CFA"},
     {34892, "LinearRaw"},
-    {51177, "Depth"}
+    {51177, "Depth"},
+    {51711, "Depth"}
 };
 
 template <typename T>
@@ -121,14 +123,18 @@ void writeTagVal(TIFF *tiffFile, TiffTag &item) {
 
 TiffTableModel::TiffTableModel(QObject *parent)
     : QAbstractItemModel{parent},
-    m_headerData({"Name", "Path", "XRes", "YRes", "Photometric", "BitsPerSample", "SamplesPerPixel", "Compression"}),
-    m_tagsMap({{2, 282},
-                   {3, 283},
-                   {4, 262},
-                   {5, 258},
-                   {6, 277},
-                   {7, 259}})
-{}
+    m_headerData({"Name", "Path", "Width", "Length", "XRes", "YRes", "Photometric", "BitsPerSample", "SamplesPerPixel", "Compression"})
+{
+    unsigned firstIndex = 2;
+    m_tagsMap = {{firstIndex++, 256},
+                 {firstIndex++, 257},
+                 {firstIndex++, 282},
+                 {firstIndex++, 283},
+                 {firstIndex++, 262},
+                 {firstIndex++, 258},
+                 {firstIndex++, 277},
+                 {firstIndex++, 259}};
+}
 
 QModelIndex TiffTableModel::index(int row, int column, const QModelIndex &parent) const
 {
@@ -165,13 +171,13 @@ QVariant TiffTableModel::data(const QModelIndex &index, int role) const
     auto keys = m_tagsMap.keys();
     switch (role) {
     case Qt::DisplayRole: {
-        if (index.column() == 0)
+        if (m_headerData[index.column()] == "Name")
             return item.m_name;
-        if (index.column() == 1)
+        if (m_headerData[index.column()] == "Path")
             return item.m_inputPath;
-        if(index.column() == 4)
+        if(m_headerData[index.column()] == "Photometric")
             return PhotometricNames[item.m_tags[m_tagsMap[index.column()]].m_value.toInt()];
-        if(index.column() == 7)
+        if(m_headerData[index.column()] == "Compression")
             return compressionNames[item.m_tags[m_tagsMap[index.column()]].m_value.toInt()];
         else if (index.column() >= keys.first() && index.column() <= keys.last())
             return item.m_tags[m_tagsMap[index.column()]].m_value;
@@ -198,9 +204,9 @@ bool TiffTableModel::setData(const QModelIndex &index, const QVariant &value, in
         return false;
     auto keys = m_tagsMap.keys();
     if (index.column() >= keys.first() && index.column() <= keys.last()) {
-    m_data[index.row()].m_tags[m_tagsMap[index.column()]].m_value = value;
-    m_data[index.row()].m_tags[m_tagsMap[index.column()]].m_changed = true;
-    emit dataChanged(index, index);
+        m_data[index.row()].m_tags[m_tagsMap[index.column()]].m_value = value;
+        m_data[index.row()].m_tags[m_tagsMap[index.column()]].m_changed = true;
+        emit dataChanged(index, index);
     }
     return true;
 }
@@ -255,7 +261,14 @@ void TiffTableModel::openTiff(QStringList pathes)
     QStringList vfiles = files();
     for(auto &path: pathes) {
         if(!vfiles.contains(path)) {
-            m_data.append(loadFromTiff(path, m_tagsMap.values()));
+            TiffModelItem item = loadFromTiff(path, m_tagsMap.values());
+            if(!item.m_tags.size()) {
+                QMessageBox msgBox;
+                msgBox.setText(QString("Can't open file: %1").arg(path));
+                msgBox.exec();
+                continue;
+            }
+            m_data.append(item);
         }
     }
     endResetModel();
@@ -275,6 +288,9 @@ TiffModelItem TiffTableModel::loadFromTiff(QString tiffFile, QVector<unsigned> t
     item.m_name = info.fileName();
     item.m_inputPath = info.absolutePath();
     TIFF *tiff = TIFFOpen(tiffFile.toLocal8Bit().data(), "r+");
+    if(!tiff) {
+        return item;
+    }
     for (int fi = 0, nfi = tiff->tif_nfields; fi < nfi; ++fi) {
         const TIFFField* pField = tiff->tif_fields[fi];
         if(tags.size() && !tags.contains(pField->field_tag)) {

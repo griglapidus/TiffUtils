@@ -44,7 +44,6 @@ public:
 
 public slots:
     void openTiff(QStringList pathes);
-
     void removeAll();
 
 private:

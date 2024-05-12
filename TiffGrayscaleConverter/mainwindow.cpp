@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QHeaderView>
+#include <QDoubleValidator>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -25,6 +26,9 @@ MainWindow::MainWindow(QWidget *parent)
     m_getOutputFolderBtn(new QPushButton("...", this)),
     m_targetPixValue(new QComboBox(this)),
     m_negativeCheck(new QCheckBox("Negative (invert image)", this)),
+    m_changeResolutionCheck(new QCheckBox("Change resolution", this)),
+    m_xResolution(new QLineEdit("500", this)),
+    m_yResolution(new QLineEdit("600", this)),
     m_processBtn(new QPushButton("Process")),
     m_stopBtn(new QPushButton("Stop")),
     m_totalProgressBar(new QProgressBar(this))
@@ -56,6 +60,13 @@ MainWindow::MainWindow(QWidget *parent)
     pixValLayout->addWidget(m_targetPixValue);
     outputLayout->addLayout(pixValLayout);
     outputLayout->addWidget(m_negativeCheck);
+    QHBoxLayout *resolutionLayout = new QHBoxLayout();
+    resolutionLayout->addWidget(m_changeResolutionCheck);
+    resolutionLayout->addWidget(new QLabel("XRes", this));
+    resolutionLayout->addWidget(m_xResolution);
+    resolutionLayout->addWidget(new QLabel("YRes", this));
+    resolutionLayout->addWidget(m_yResolution);
+    outputLayout->addLayout(resolutionLayout);
     m_outputGroupBox->setLayout(outputLayout);
     mainLayout->addWidget(m_outputGroupBox);
     QHBoxLayout *startStopLayout = new QHBoxLayout();
@@ -65,6 +76,11 @@ MainWindow::MainWindow(QWidget *parent)
     mainLayout->addWidget(m_totalProgressBar);
     centralWidget->setLayout(mainLayout);
     setCentralWidget(centralWidget);
+
+    m_xResolution->setValidator(new QDoubleValidator(0.0, 10000.0, 4, m_xResolution));
+    m_yResolution->setValidator(new QDoubleValidator(0.0, 10000.0, 4, m_yResolution));
+    m_xResolution->setEnabled(false);
+    m_yResolution->setEnabled(false);
 
     m_filesTableView->setModel(&m_filesModel);
     m_filesTableView->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -88,11 +104,14 @@ MainWindow::MainWindow(QWidget *parent)
     QObject::connect(m_processBtn, SIGNAL(clicked(bool)), this, SLOT(ConvertTiff()));
     QObject::connect(m_stopBtn, SIGNAL(clicked(bool)), m_tiffConverter, SLOT(stopProcess()), Qt::DirectConnection);
     QObject::connect(m_useOutSubDirCheck, SIGNAL(stateChanged(int)), this, SLOT(onUseOutSubDirCheck(int)));
-    QObject::connect(this, SIGNAL(ConvertTiffSignal(QStringList,QString,int, bool, bool)), m_tiffConverter, SLOT(ConvertTiff(QStringList,QString,int, bool, bool)), Qt::QueuedConnection);
+    QObject::connect(m_changeResolutionCheck, SIGNAL(stateChanged(int)), this, SLOT(onChangeResolutionCheck(int)));
+    QObject::connect(this, SIGNAL(ConvertTiffSignal(QStringList,QString,int,bool,bool)), m_tiffConverter, SLOT(ConvertTiff(QStringList,QString,int,bool,bool)), Qt::QueuedConnection);
+    QObject::connect(this, SIGNAL(setRes(double,double)), m_tiffConverter, SLOT(setRes(double,double)), Qt::QueuedConnection);
     QObject::connect(m_tiffConverter, SIGNAL(progressSignal(quint32)), this, SLOT(setProgress(quint32)), Qt::QueuedConnection);
     QObject::connect(m_tiffConverter, SIGNAL(finished()), this, SLOT(finished()), Qt::QueuedConnection);
+    QObject::connect(m_tiffConverter, SIGNAL(showMsg(QString)), this, SLOT(showMsg(QString)), Qt::QueuedConnection);
     m_useOutSubDirCheck->setChecked(true);
-
+    m_changeResolutionCheck->setChecked(false);
     m_converterThread->start();
     resize(650, 500);
 }
@@ -113,6 +132,12 @@ void MainWindow::ConvertTiff()
             return;
         }
     }
+    if(m_changeResolutionCheck) {
+        emit setRes(m_xResolution->text().toDouble(), m_yResolution->text().toDouble());
+    } else {
+        emit setRes(0, 0);
+    }
+
     setProgress(0);
     m_processBtn->setEnabled(false);
     emit ConvertTiffSignal(m_filesModel.files(), outputPath, m_targetPixValue->currentIndex() + 1, m_negativeCheck->isChecked(), m_openOutputOnFinish->isChecked());
@@ -170,6 +195,12 @@ void MainWindow::onUseOutSubDirCheck(int checked)
     m_getOutputFolderBtn->setEnabled(checked == 0);
 }
 
+void MainWindow::onChangeResolutionCheck(int checked)
+{
+    m_xResolution->setEnabled(checked != 0);
+    m_yResolution->setEnabled(checked != 0);
+}
+
 void MainWindow::setProgress(quint32 progressVal)
 {
     m_totalProgressBar->setValue(progressVal);
@@ -178,4 +209,11 @@ void MainWindow::setProgress(quint32 progressVal)
 void MainWindow::finished()
 {
     m_processBtn->setEnabled(true);
+}
+
+void MainWindow::showMsg(QString msg)
+{
+    QMessageBox msgBox;
+    msgBox.setText(msg);
+    msgBox.exec();
 }
