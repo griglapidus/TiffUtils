@@ -107,6 +107,18 @@ QMap<int, QString> PhotometricNames = {
     {51711, "Depth"}
 };
 
+QString getTagName(uint32_t tagID)
+{
+    const TIFFFieldArray *fieldsArray = _TIFFGetFields();
+    std::vector<TIFFField> fields(fieldsArray->fields, fieldsArray->fields + fieldsArray->count);
+    auto it = std::find_if(fields.begin(), fields.end(), [&](const TIFFField& field){ return field.field_tag == tagID; });
+    if(it != fields.end()) {
+        return QString(it->field_name);
+    }
+    return QString();
+}
+
+
 template <typename T>
 void readTagVal(TIFF *tiffFile, TiffTag &item) {
     T v;
@@ -126,14 +138,19 @@ TiffTableModel::TiffTableModel(QObject *parent)
     m_headerData({"Name", "Path", "Width", "Length", "XRes", "YRes", "Photometric", "BitsPerSample", "SamplesPerPixel", "Compression"})
 {
     unsigned firstIndex = 2;
-    m_tagsMap = {{firstIndex++, 256},
-                 {firstIndex++, 257},
-                 {firstIndex++, 282},
-                 {firstIndex++, 283},
-                 {firstIndex++, 262},
-                 {firstIndex++, 258},
-                 {firstIndex++, 277},
-                 {firstIndex++, 259}};
+    m_tagsMap = {{firstIndex++, TIFFTAG_IMAGEWIDTH},
+                 {firstIndex++, TIFFTAG_IMAGELENGTH},
+                 {firstIndex++, TIFFTAG_XRESOLUTION},
+                 {firstIndex++, TIFFTAG_YRESOLUTION},
+                 {firstIndex++, TIFFTAG_PHOTOMETRIC},
+                 {firstIndex++, TIFFTAG_BITSPERSAMPLE},
+                 {firstIndex++, TIFFTAG_SAMPLESPERPIXEL},
+                 {firstIndex++, TIFFTAG_COMPRESSION}};
+
+#ifdef QT_DEBUG
+    m_tagsMap[firstIndex++] = TIFFTAG_ROWSPERSTRIP;
+    m_headerData.append(getTagName(TIFFTAG_ROWSPERSTRIP));
+#endif
 }
 
 QModelIndex TiffTableModel::index(int row, int column, const QModelIndex &parent) const

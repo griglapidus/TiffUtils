@@ -1,17 +1,21 @@
 #include "TiffConverter.h"
 #include <immintrin.h>
 #include <tiffio.h>
+#include <tiffiop.h>
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QMessageBox>
+#include <omp.h>
+#include <QDebug>
 
 extern QMap<int, QString> PhotometricNames;
 
 void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, int targetValue, bool negative)
 {
+    QDateTime start = QDateTime::currentDateTime();
     unsigned allocatedSize256In = (nWidth + 255) / 256;
     unsigned allocatedSize256Out = allocatedSize256In * 2;
 
@@ -40,7 +44,7 @@ void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
 #pragma omp parallel for
         for (int j = 0; j < inLineData.size() * 8; ++j) {
             out[j] = _pdep_u64((uint64_t)in[j], exendedMask);
-        }
+            }
 #pragma omp parallel for
         for (int j = 0; j < outLineData.size(); ++j) {
             outLineData[j] = _mm256_or_si256(_mm256_slli_epi64(leftData[j], 1), rightData[j]);
@@ -48,16 +52,19 @@ void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
 
             if(negative) {
                 outLineData[j] = _mm256_xor_si256(outLineData[j], negativeMask);
-            }
+        }
         }
         TIFFWriteScanline(outTiffImage, outLineData.data(), i, 0);
     }
+    QDateTime end = QDateTime::currentDateTime();
+    qint64 duration = start.msecsTo(end);
+    qDebug() << "Convert1Bit" << inTiffImage->tif_name << start << "duration" << duration << "msec";
 }
 
 void Convert2Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, bool negative)
 {
+    QDateTime start = QDateTime::currentDateTime();
     unsigned allocatedSize256In = (nWidth + 127) / 128;
-    unsigned allocatedSize256Out = allocatedSize256In;
 
     std::vector<__m256i> inLineData(allocatedSize256In);
 
@@ -73,11 +80,14 @@ void Convert2Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
         }
         TIFFWriteScanline(outTiffImage, inLineData.data(), i, 0);
     }
+    QDateTime end = QDateTime::currentDateTime();
+    qint64 duration = start.msecsTo(end);
+    qDebug() << "Convert2Bit" << inTiffImage->tif_name << start << "duration" << duration << "msec";
 }
 
 void Convert8Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, bool negative)
 {
-
+    QDateTime start = QDateTime::currentDateTime();
     unsigned allocatedSize256In = (nWidth + 31)/32 * 4;
     unsigned allocatedSize256Out = allocatedSize256In / 4;
 
@@ -112,6 +122,9 @@ void Convert8Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
 
         TIFFWriteScanline(outTiffImage, outLineData.data(), row, 0);
     }
+    QDateTime end = QDateTime::currentDateTime();
+    qint64 duration = start.msecsTo(end);
+    qDebug() << "Convert8Bit" << inTiffImage->tif_name << start << "duration" << duration << "msec";
 }
 
 TiffConverter::TiffConverter(QObject *parent)
@@ -125,11 +138,15 @@ void TiffConverter::ConvertTiff(QStringList inFiles, QString outputFolder, int t
         return;
     }
     int count = inFiles.size();
-    int curIndex = 0;
+    std::atomic<int> doneCounter = 0;
+    omp_lock_t ompSync;
+    omp_init_lock( &ompSync );
     QStringList outputFolders;
-    for(auto& file: inFiles) {
+#pragma omp parallel for shared(doneCounter)
+    for(int i = 0; i < inFiles.size(); ++i) {
         if(m_stopFlag)
-            break;
+            continue;
+        QString file = inFiles[i];
         QFileInfo info(file);
         QString fileName = info.fileName();
         QString outputFilePath;
@@ -148,8 +165,10 @@ void TiffConverter::ConvertTiff(QStringList inFiles, QString outputFolder, int t
         if (fFile.exists())
             fFile.remove();
         ConvertTiff(file, outputFilePath, targetValue, negative);
-        curIndex++;
-        emit progressSignal(100 * curIndex / count);
+        omp_set_lock( &ompSync );
+        doneCounter++;
+        emit progressSignal(100 * doneCounter / count);
+        omp_unset_lock( &ompSync );
     }
     if(openOutput) {
         outputFolders.removeDuplicates();

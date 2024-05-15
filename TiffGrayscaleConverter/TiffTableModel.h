@@ -25,6 +25,8 @@ struct TiffModelItem
     QMap<unsigned, TiffTag> m_tags;
 };
 
+QString getTagName(uint32_t tagID);
+
 class TiffTableModel : public QAbstractItemModel
 {
 public:

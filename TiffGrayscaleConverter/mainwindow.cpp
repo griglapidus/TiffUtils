@@ -121,6 +121,8 @@ MainWindow::~MainWindow() {
 
 void MainWindow::ConvertTiff()
 {
+    QStringList files = m_filesModel.files();
+    if(!files.size()) return;
     bool useOutputSubFolder = m_useOutSubDirCheck->isChecked();
     QString outputPath = "";
     if(!useOutputSubFolder) {
@@ -140,7 +142,7 @@ void MainWindow::ConvertTiff()
 
     setProgress(0);
     m_processBtn->setEnabled(false);
-    emit ConvertTiffSignal(m_filesModel.files(), outputPath, m_targetPixValue->currentIndex() + 1, m_negativeCheck->isChecked(), m_openOutputOnFinish->isChecked());
+    emit ConvertTiffSignal(files, outputPath, m_targetPixValue->currentIndex() + 1, m_negativeCheck->isChecked(), m_openOutputOnFinish->isChecked());
 }
 
 void MainWindow::addFiles()
