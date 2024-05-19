@@ -102,7 +102,7 @@ void Convert8Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
     {
         TIFFReadScanline(inTiffImage,(qint8*)inLineData.data(), row);
 #pragma omp parallel for
-        for(unsigned i = 0; i < allocatedSize256Out; ++i) {
+        for(int i = 0; i < allocatedSize256Out; ++i) {
             quint8 *chankData = (quint8*)&inLineData[i*4];
             for(int j = 0; j < 4; ++j) {
                 for(int pixel = 0; pixel < 32; ++pixel) {
