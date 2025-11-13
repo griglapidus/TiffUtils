@@ -45,14 +45,17 @@ endif()
 
 
 find_package(OpenMP REQUIRED)
-if (OPENMP_FOUND)
-    #link_libraries(OpenMP::OpenMP_CXX)
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS} -static")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS} -static")
-    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif()
+target_link_libraries(TiffGrayScaleConverter PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    tiff
+    zlib
+    OpenMP::OpenMP_CXX
+)
 
-target_link_libraries(TiffGrayScaleConverter PRIVATE Qt${QT_VERSION_MAJOR}::Widgets TIFF::tiff ZLIB::ZLIBSTATIC)
+if(OPENMP_FOUND)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2 -mbmi2")

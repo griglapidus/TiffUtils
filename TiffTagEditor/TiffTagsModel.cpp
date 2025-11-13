@@ -100,7 +100,7 @@ void TiffTagsModel::loadFromTiff()
         TiffTagsModelItem item;
         item.m_name = QString(pField->field_name);
         item.m_tagID = pField->field_tag;
-        item.m_valueType = pField->set_field_type;
+        item.m_valueType = pField->set_get_field_type;
         if(!item.m_name.size()) continue;
         if (TIFFFieldWithTag(m_tiffFile, item.m_tagID)) {
             switch (item.m_valueType) {

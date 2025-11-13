@@ -316,7 +316,7 @@ TiffModelItem TiffTableModel::loadFromTiff(QString tiffFile, QVector<unsigned> t
         TiffTag tag;
         tag.m_name = QString(pField->field_name);
         tag.m_tagID = pField->field_tag;
-        tag.m_valueType = pField->set_field_type;
+        tag.m_valueType = pField->set_get_field_type;
         if(!tag.m_name.size()) continue;
         if (TIFFFieldWithTag(tiff, tag.m_tagID)) {
             switch (tag.m_valueType) {
