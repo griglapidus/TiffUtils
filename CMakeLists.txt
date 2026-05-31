@@ -23,10 +23,29 @@ set(tiff-tests OFF CACHE INTERNAL "Disable LibTiff tests")
 set(tiff-tools OFF CACHE INTERNAL "Disable LibTiff tools")
 set(tiff-contrib OFF CACHE INTERNAL "Disable LibTiff contrib")
 
-set(CMAKE_DISABLE_FIND_PACKAGE_ZLIB ON)
-set(zlib_DIR ${zlib_SOURCE_DIR})
+# Build zlib first so we can wire it into libtiff's find_package(ZLIB).
+FetchContent_MakeAvailable(zlib)
 
-FetchContent_MakeAvailable(zlib tiff)
+# zlib's CMake creates "zlib" (shared) and "zlibstatic" (static) targets but no
+# ZLIB::ZLIB alias, and it does NOT register as a found package. libtiff calls
+# the stock find_package(ZLIB), which only looks for a system-installed zlib.
+# Expose the FetchContent build under the names FindZLIB / libtiff expect so the
+# Deflate (AdobeDeflate) codec is compiled in (sets ZIP_SUPPORT).
+if(NOT TARGET ZLIB::ZLIB)
+    add_library(ZLIB::ZLIB ALIAS zlibstatic)
+endif()
+
+set(ZLIB_INCLUDE_DIR     "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}" CACHE STRING "" FORCE)
+set(ZLIB_INCLUDE_DIRS    "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}" CACHE STRING "" FORCE)
+set(ZLIB_LIBRARY_RELEASE zlibstatic CACHE STRING "" FORCE)
+set(ZLIB_LIBRARY         zlibstatic CACHE STRING "" FORCE)
+set(ZLIB_LIBRARIES       zlibstatic CACHE STRING "" FORCE)
+set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
+
+# Force libtiff's zlib option ON (overrides any stale cached value).
+set(zlib ON CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(tiff)
 
 set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
 
