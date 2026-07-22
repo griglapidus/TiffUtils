@@ -10,10 +10,14 @@
 #include <QMessageBox>
 #include <omp.h>
 #include <QDebug>
+#include <QMap>
+#include <QPair>
 
 extern QMap<int, QString> PhotometricNames;
 
-void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, int targetValue, bool negative)
+using ConvertFn = void (*)(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, int targetValue, bool negative);
+
+void Convert1To2(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, int targetValue, bool negative)
 {
     QDateTime start = QDateTime::currentDateTime();
     unsigned allocatedSize256In = (nWidth + 255) / 256;
@@ -58,11 +62,12 @@ void Convert1Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
     }
     QDateTime end = QDateTime::currentDateTime();
     qint64 duration = start.msecsTo(end);
-    qDebug() << "Convert1Bit" << inTiffImage->tif_name << start << "duration" << duration << "msec";
+    qDebug() << "Convert1To2" << inTiffImage->tif_name << start << "duration" << duration << "msec";
 }
 
-void Convert2Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, bool negative)
+void Convert2To2(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, int targetValue, bool negative)
 {
+    Q_UNUSED(targetValue);
     QDateTime start = QDateTime::currentDateTime();
     unsigned allocatedSize256In = (nWidth + 127) / 128;
 
@@ -82,27 +87,28 @@ void Convert2Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
     }
     QDateTime end = QDateTime::currentDateTime();
     qint64 duration = start.msecsTo(end);
-    qDebug() << "Convert2Bit" << inTiffImage->tif_name << start << "duration" << duration << "msec";
+    qDebug() << "Convert2To2" << inTiffImage->tif_name << start << "duration" << duration << "msec";
 }
 
-void Convert8Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, bool negative)
+void Convert8To2(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight, int targetValue, bool negative)
 {
+    Q_UNUSED(targetValue);
     QDateTime start = QDateTime::currentDateTime();
-    unsigned allocatedSize256In = (nWidth + 31)/32 * 4;
-    unsigned allocatedSize256Out = allocatedSize256In / 4;
+    unsigned allocatedSize256Out = (nWidth + 127) / 128;
+    unsigned allocatedSize256In = allocatedSize256Out * 4;
 
     QVector<__m256i> inLineData(allocatedSize256In);
     QVector<__m256i> outLineData(allocatedSize256Out);
     QVector<__m256i> copyMasks = {_mm256_set1_epi8(0xc0),_mm256_set1_epi8(0x30),_mm256_set1_epi8(0x0c),_mm256_set1_epi8(0x03)};
 
     __m256i negativeMask = _mm256_set1_epi8(0xff);
-    QVector<__m256i> pixels(4);
-    auto pixelsBytes = reinterpret_cast<quint8(&)[4][32]>(pixels[0]);
     for (int row = 0; row < nHeight; row++)
     {
         TIFFReadScanline(inTiffImage,(qint8*)inLineData.data(), row);
 #pragma omp parallel for
         for(int i = 0; i < allocatedSize256Out; ++i) {
+            __m256i pixels[4];
+            auto pixelsBytes = reinterpret_cast<quint8(&)[4][32]>(pixels[0]);
             quint8 *chankData = (quint8*)&inLineData[i*4];
             for(int j = 0; j < 4; ++j) {
                 for(int pixel = 0; pixel < 32; ++pixel) {
@@ -124,14 +130,22 @@ void Convert8Bit(TIFF *inTiffImage, TIFF *outTiffImage, int nWidth, int nHeight,
     }
     QDateTime end = QDateTime::currentDateTime();
     qint64 duration = start.msecsTo(end);
-    qDebug() << "Convert8Bit" << inTiffImage->tif_name << start << "duration" << duration << "msec";
+    qDebug() << "Convert8To2" << inTiffImage->tif_name << start << "duration" << duration << "msec";
 }
+
+static const QVector<int> g_supportedBitDepths = {1, 2, 4, 8, 16, 32};
+
+static const QMap<QPair<int, int>, ConvertFn> g_convertDispatch = {
+    {{1, 2}, Convert1To2},
+    {{2, 2}, Convert2To2},
+    {{8, 2}, Convert8To2},
+};
 
 TiffConverter::TiffConverter(QObject *parent)
     : QObject{parent}
 {}
 
-void TiffConverter::ConvertTiff(QStringList inFiles, QString outputFolder, int targetValue, bool negative, bool openOutput)
+void TiffConverter::ConvertTiff(QStringList inFiles, QString outputFolder, int outputBitDepth, int targetValue, bool negative, bool openOutput)
 {
     m_stopFlag = false;
     if(!inFiles.size()){
@@ -156,15 +170,16 @@ void TiffConverter::ConvertTiff(QStringList inFiles, QString outputFolder, int t
             outputFilePath = dir.absoluteFilePath(fileName);
         } else {
             QDir dir(info.absolutePath());
-            dir.mkdir("Output_2Bit");
-            dir.cd("Output_2Bit");
+            QString outputSubDir = QString("Output_%1Bit").arg(outputBitDepth);
+            dir.mkdir(outputSubDir);
+            dir.cd(outputSubDir);
             outputFolders.append(dir.absolutePath());
             outputFilePath = dir.absoluteFilePath(fileName);
         }
         QFile fFile(outputFilePath);
         if (fFile.exists())
             fFile.remove();
-        ConvertTiff(file, outputFilePath, targetValue, negative);
+        ConvertTiff(file, outputFilePath, outputBitDepth, targetValue, negative);
         omp_set_lock( &ompSync );
         doneCounter++;
         emit progressSignal(100 * doneCounter / count);
@@ -184,7 +199,7 @@ void TiffConverter::stopProcess()
     m_stopFlag = true;
 }
 
-void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue, bool negative)
+void TiffConverter::ConvertTiff(QString inFile, QString outFile, int outputBitDepth, int targetValue, bool negative)
 {
     TIFF* inTiffImage = TIFFOpen(inFile.toLocal8Bit(), "r");
     if (inTiffImage == NULL)
@@ -206,7 +221,7 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     TIFFGetField(inTiffImage, TIFFTAG_COMPRESSION, &nInComp);
     TIFFGetField(inTiffImage, TIFFTAG_ROWSPERSTRIP, &nRowsPerStrip);
 
-    if(nInBpp != 1 && nInBpp != 8 && nInBpp != 2) {
+    if(!g_supportedBitDepths.contains(nInBpp)) {
         emit showMsg(QString("Unsupported sample per pixel image format: %1 in File: %2").arg(nInBpp).arg(inFile));
         return;
     }
@@ -232,24 +247,17 @@ void TiffConverter::ConvertTiff(QString inFile, QString outFile, int targetValue
     TIFFSetField(outTiffImage, TIFFTAG_XRESOLUTION, fXRes);
     TIFFSetField(outTiffImage, TIFFTAG_YRESOLUTION, fYRes);
     TIFFSetField(outTiffImage, TIFFTAG_SAMPLESPERPIXEL, nInSpp);
-    TIFFSetField(outTiffImage, TIFFTAG_BITSPERSAMPLE, 2);
+    TIFFSetField(outTiffImage, TIFFTAG_BITSPERSAMPLE, outputBitDepth);
     TIFFSetField(outTiffImage, TIFFTAG_PLANARCONFIG, nInPlanConf);
     TIFFSetField(outTiffImage, TIFFTAG_PHOTOMETRIC, nInPhotomrtric);
     TIFFSetField(outTiffImage, TIFFTAG_COMPRESSION, nInComp);
     TIFFSetField(outTiffImage, TIFFTAG_ROWSPERSTRIP, nRowsPerStrip);
 
-    switch (nInBpp) {
-    case 1:{
-        Convert1Bit(inTiffImage, outTiffImage, nWidth, nHeight, targetValue, negative);
-    }break;
-    case 2:{
-        Convert2Bit(inTiffImage, outTiffImage, nWidth, nHeight, negative);
-    }break;
-    case 8:{
-        Convert8Bit(inTiffImage, outTiffImage, nWidth, nHeight, negative);
-    }break;
-    default:
-        break;
+    auto convertIt = g_convertDispatch.find(qMakePair((int)nInBpp, outputBitDepth));
+    if(convertIt == g_convertDispatch.end()) {
+        emit showMsg(QString("Unsupported conversion: %1 bit -> %2 bit in File: %3").arg(nInBpp).arg(outputBitDepth).arg(inFile));
+    } else {
+        convertIt.value()(inTiffImage, outTiffImage, nWidth, nHeight, targetValue, negative);
     }
 
     TIFFClose(inTiffImage);

@@ -298,6 +298,15 @@ void TiffTableModel::removeAll()
     endResetModel();
 }
 
+QSet<quint16> TiffTableModel::bitDepths() const
+{
+    QSet<quint16> depths;
+    for(auto &item: m_data) {
+        depths.insert(item.m_tags.value(TIFFTAG_BITSPERSAMPLE).m_value.toUInt());
+    }
+    return depths;
+}
+
 TiffModelItem TiffTableModel::loadFromTiff(QString tiffFile, QVector<unsigned> tags)
 {
     TiffModelItem item;

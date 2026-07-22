@@ -5,6 +5,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QComboBox>
+#include <QSpinBox>
+#include <QLabel>
 #include <QProgressBar>
 #include <QCheckBox>
 #include <QGroupBox>
@@ -32,13 +34,15 @@ private slots:
     void ConvertTiff();
     void onUseOutSubDirCheck(int checked);
     void onChangeResolutionCheck(int checked);
+    void onOutputBitDepthChanged(int index);
     void setProgress(quint32 progressVal);
     void finished();
     void showMsg(QString msg);
 signals:
-    void ConvertTiffSignal(QStringList inFiles, QString outputFolder, int targetValue, bool negative, bool openOutput);
+    void ConvertTiffSignal(QStringList inFiles, QString outputFolder, int outputBitDepth, int targetValue, bool negative, bool openOutput);
     void setRes(double newXRes, double newYRes);
 private:
+    void updateTargetPixValueState();
     QThread *m_converterThread = nullptr;
     TiffConverter *m_tiffConverter = nullptr;
     TiffTableModel m_filesModel;
@@ -55,7 +59,10 @@ private:
     QCheckBox *m_openOutputOnFinish = nullptr;
     QLineEdit *m_outputPath = nullptr;
     QPushButton *m_getOutputFolderBtn = nullptr;
+    QComboBox *m_outputBitDepth = nullptr;
+    QLabel *m_targetPixValueLabel = nullptr;
     QComboBox *m_targetPixValue = nullptr;
+    QSpinBox *m_targetPixValueSpin = nullptr;
     QCheckBox *m_negativeCheck = nullptr;
     QCheckBox *m_changeResolutionCheck = nullptr;
     QLineEdit *m_xResolution = nullptr;

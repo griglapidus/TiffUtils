@@ -12,7 +12,7 @@ public:
 
 
 public slots:
-    void ConvertTiff(QStringList inFiles, QString outputFolder, int targetValue, bool negative, bool openOutput);
+    void ConvertTiff(QStringList inFiles, QString outputFolder, int outputBitDepth, int targetValue, bool negative, bool openOutput);
     void stopProcess();
     void setRes(double newXRes, double newYRes);
 
@@ -22,7 +22,7 @@ signals:
     void showMsg(QString);
 
 private:
-    void ConvertTiff(QString inFile, QString outFile, int targetValue, bool negative);
+    void ConvertTiff(QString inFile, QString outFile, int outputBitDepth, int targetValue, bool negative);
 
 private:
     std::atomic_bool m_stopFlag = false;

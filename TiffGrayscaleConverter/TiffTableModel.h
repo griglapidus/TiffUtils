@@ -2,6 +2,7 @@
 #define TIFFTABLEMODEL_H
 
 #include <QAbstractItemModel>
+#include <QSet>
 
 #include <tif_dir.h>
 #include <tiff.h>
@@ -43,6 +44,7 @@ public:
     virtual bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex()) override;
 
     QStringList files();
+    QSet<quint16> bitDepths() const;
 
 public slots:
     void openTiff(QStringList pathes);
